@@ -1,4 +1,4 @@
-import { Url } from "@prisma/client";
+import { Prisma, Url } from "@prisma/client";
 import type { NextPage } from "next";
 import Head from "next/head";
 import { useForm } from "react-hook-form";
@@ -101,15 +101,21 @@ const UrlItem: React.FC<{ url: Url }> = ({ url }) => {
         className="modal-toggle"
       />
       <label htmlFor={`chain-modal-${url.id}`} className="modal cursor-pointer">
-        <div className="modal-box relative flex flex-col gap-2" for="">
+        <div className="modal-box relative flex flex-col gap-2">
           <h3 className="text-lg font-bold">Certificates Chain</h3>
           <div className="flex flex-col gap-3">
             {url.chain &&
-              typeof url.chain.length !== "undefined" &&
-              url.chain.map((u) => (
+              typeof (url.chain as Prisma.JsonArray).length !== "undefined" &&
+              (url.chain as Prisma.JsonArray).map((u) => (
                 <div>
-                  <p>Issuer: {JSON.stringify(u.issuer)}</p>
-                  <p>Subject{JSON.stringify(u.subject)}</p>
+                  <p>
+                    Issuer:
+                    {JSON.stringify((u as Prisma.JsonObject)?.issuer ?? "")}
+                  </p>
+                  <p>
+                    Subject:
+                    {JSON.stringify((u as Prisma.JsonObject)?.subject ?? "")}
+                  </p>
                 </div>
               ))}
           </div>

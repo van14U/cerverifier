@@ -6,39 +6,6 @@ import * as tls from "tls";
 import http from "http";
 import fs from "fs/promises";
 
-const downloadCA = () => {
-  return new Promise((resolve, reject) => {
-    http
-      .get(
-        {
-          // host: "chromium.googlesource.com",
-          // port: 80,
-          // path: "/chromium/src/+/main/net/data/ssl/chrome_root_store/root_store.md",
-          host: "raw.githubusercontent.com",
-          port: 80,
-          path: "/sharon1160/certificates-trust-verifier/main/verifierApp/verifierApp/static/data/Google_Chrome.pem",
-        },
-        (res) => {
-          console.log("Got response: " + res.statusCode);
-          // resolve(res.headers.connection);
-          // handle the response
-          let res_data = "";
-          res.on("data", (chunk) => {
-            res_data += chunk;
-          });
-          res.on("end", () => {
-            console.log("\n\n\n\nresdata", res_data);
-            resolve(res_data);
-          });
-        }
-      )
-      .on("error", (e) => {
-        console.log("Got error: " + e.message);
-        reject(e.message);
-      });
-  });
-};
-
 const testUrl = (url: string) => {
   return new Promise(async (resolve, reject) => {
     const { hostname, port } = new URL(url);
