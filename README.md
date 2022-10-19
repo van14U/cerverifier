@@ -1,3 +1,3 @@
 # Verify certificats
 
-Verificador en [vercel](https://cerverifier.vercel.app/)
+Verificador en https://cerverifier.vercel.app/
