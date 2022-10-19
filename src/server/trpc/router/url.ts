@@ -2,31 +2,29 @@ import { router, publicProcedure } from "../trpc";
 import { z } from "zod";
 import { urlValidator } from "../../../shared/url";
 import * as tls from "tls";
-// import https from "https";
-import http from "http";
 import fs from "fs/promises";
 
 const testUrl = (url: string) => {
+  // return new Promise<Set<tls.DetailedPeerCertificate>>(
   return new Promise(async (resolve, reject) => {
     const { hostname, port } = new URL(url);
     console.log("\n\n\n\n HOSTNAMEEEE", hostname, port);
     const socket = tls.connect(
       {
-        // port: 443,
         port: port ? Number(port) : 443,
         timeout: 3000,
         host: hostname,
         servername: hostname,
-        ca: [
-          await fs.readFile("./chromium_root_store.pem"),
-          await fs.readFile("./mozilla_root_store.pem"),
-          await fs.readFile("./msft_root_store.pem"),
-        ],
+        // ca: [
+        //   await fs.readFile("./chromium_root_store.pem"),
+        //   await fs.readFile("./mozilla_root_store.pem"),
+        //   await fs.readFile("./msft_root_store.pem"),
+        // ],
       },
       () => {
         let peerCert = socket.getPeerCertificate(true);
         let lasIssuer = "";
-        const list = new Set();
+        const list = new Set<tls.DetailedPeerCertificate>();
         const chain = [];
         do {
           list.add(peerCert);
@@ -48,7 +46,9 @@ const testUrl = (url: string) => {
         socket.end(() => {
           console.log("cliend closed successfully");
         });
+        console.log("\n\n\n\n\nchain", list);
         resolve({ chain, lasIssuerCN: lasIssuer, host: hostname });
+        // resolve(list);
       }
     );
     socket.on("timeout", (conn) => {
@@ -73,8 +73,8 @@ export const urlRouter = router({
   addUrl: publicProcedure
     .input(urlValidator)
     .mutation(async ({ input, ctx }) => {
-      const addedUrlInfo = new Array();
-      const addedUrlsInput = new Array<string>();
+      const addedUrlInfo = [];
+      const addedUrlsInput: string[] = [];
       // const addedPeerCertificates = new Array<tls.PeerCertificate>();
       // const addedPeerCertificates = new Array();
       if (typeof input.urlOrHost === "string") {
@@ -97,7 +97,7 @@ export const urlRouter = router({
               data: {
                 host: hostname,
                 tls: false,
-                trustLevel: (0).toString(),
+                trust: 0,
                 chain: {},
               },
             });
@@ -125,7 +125,7 @@ export const urlRouter = router({
                 data: {
                   host: hostname,
                   tls: false,
-                  trustLevel: (0).toString(),
+                  trust: 0,
                   chain: {},
                 },
               });
@@ -141,13 +141,15 @@ export const urlRouter = router({
         const urlInput = addedUrlsInput[i]!;
 
         const { hostname } = new URL(urlInput);
+        // console.log("\n\n\n\n\nstrigg", JSON.stringify(Array.from(urlInfo)));
         await ctx.prisma.url.create({
           data: {
             host: hostname,
             tls: true,
             // chain: JSON.stringify(urlInfo.chain),
-            trustLevel: (3).toString(),
-            chain: urlInfo.chain,
+            trust: 3,
+            chain: urlInfo,
+            // chain: {},
           },
         });
       }

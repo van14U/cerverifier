@@ -17,9 +17,9 @@ model Example {
 }
 
 model Url {
-    id         String  @id @default(cuid())
-    host       String
-    tls        Boolean
-    chain      Json
-    trustLevel String
+    id    String  @id @default(cuid())
+    host  String
+    tls   Boolean
+    chain Json
+    trust Int
 }

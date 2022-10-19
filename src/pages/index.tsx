@@ -9,7 +9,6 @@ import React from "react";
 import { BiLinkExternal as ExternalLinkIcon } from "react-icons/bi";
 import { GiPlainCircle as CircleIcon } from "react-icons/gi";
 import { GiBreakingChain as ChainIcon } from "react-icons/gi";
-import { error } from "console";
 import { ZodError } from "zod";
 
 type ScoreContentType = {
@@ -47,18 +46,9 @@ const UrlItem: React.FC<{ url: Url }> = ({ url }) => {
         </div>
         <div className="collapse-content">
           <div className="flex flex-col gap-2">
-            <ScoreContent
-              vendor="Microsoft Edge"
-              score={Number(url.trustLevel)}
-            />
-            <ScoreContent
-              vendor="Google Chrome"
-              score={Number(url.trustLevel)}
-            />
-            <ScoreContent
-              vendor="Mozilla Firefox"
-              score={Number(url.trustLevel)}
-            />
+            <ScoreContent vendor="Microsoft Edge" score={url.trust} />
+            <ScoreContent vendor="Google Chrome" score={url.trust} />
+            <ScoreContent vendor="Mozilla Firefox" score={url.trust} />
             <label
               htmlFor={`chain-modal-${url.id}`}
               className="modal-button btn btn-sm"
@@ -86,13 +76,13 @@ const UrlItem: React.FC<{ url: Url }> = ({ url }) => {
         </div>
       </div>
       <div className={gridClasses}>
-        <ScoreContent vendor="Microsoft Edge" score={Number(url.trustLevel)} />
+        <ScoreContent vendor="Microsoft Edge" score={url.trust} />
       </div>
       <div className={gridClasses}>
-        <ScoreContent vendor="Google Chrome" score={Number(url.trustLevel)} />
+        <ScoreContent vendor="Google Chrome" score={url.trust} />
       </div>
       <div className={gridClasses}>
-        <ScoreContent vendor="Mozilla Firefox" score={Number(url.trustLevel)} />
+        <ScoreContent vendor="Mozilla Firefox" score={url.trust} />
       </div>
 
       <input
@@ -104,20 +94,22 @@ const UrlItem: React.FC<{ url: Url }> = ({ url }) => {
         <div className="modal-box relative flex flex-col gap-2">
           <h3 className="text-lg font-bold">Certificates Chain</h3>
           <div className="flex flex-col gap-3">
-            {url.chain &&
-              typeof (url.chain as Prisma.JsonArray).length !== "undefined" &&
-              (url.chain as Prisma.JsonArray).map((u) => (
-                <div>
-                  <p>
-                    Issuer:
-                    {JSON.stringify((u as Prisma.JsonObject)?.issuer ?? "")}
-                  </p>
-                  <p>
-                    Subject:
-                    {JSON.stringify((u as Prisma.JsonObject)?.subject ?? "")}
-                  </p>
-                </div>
-              ))}
+            {
+              url.chain && <div>{JSON.stringify(url.chain)}</div>
+              // typeof (url.chain as Prisma.JsonArray).length !== "undefined" &&
+              // (url.chain as Prisma.JsonArray).map((u) => (
+              //   <div key={Math.random()}>
+              //     <p>
+              //       Issuer:
+              //       {JSON.stringify((u as Prisma.JsonObject)?.issuer ?? "")}
+              //     </p>
+              //     <p>
+              //       Subject:
+              //       {JSON.stringify((u as Prisma.JsonObject)?.subject ?? "")}
+              //     </p>
+              //   </div>
+              // ))}
+            }
           </div>
         </div>
       </label>
@@ -176,7 +168,7 @@ const UrlsForm = () => {
   const {
     register,
     handleSubmit,
-    formState: { errors, isValid },
+    formState: { errors },
   } = useForm<UrlValidatorType>({
     resolver: zodResolver(urlValidator),
     mode: "onChange",
