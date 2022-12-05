@@ -48,7 +48,6 @@ const testUrl = (url: string) => {
         });
         console.log("\n\n\n\n\nchain", list);
         resolve({ chain, lasIssuerCN: lasIssuer, host: hostname });
-        // resolve(list);
       }
     );
     socket.on("timeout", (conn) => {
