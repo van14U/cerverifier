@@ -1,17 +1,46 @@
 import { router, publicProcedure } from "../trpc";
-import { z } from "zod";
+import { z, ZodEffects, ZodError } from "zod";
 import { urlValidator } from "../../../shared/url";
 import * as tls from "tls";
 import fs from "fs/promises";
+import { TRPCError } from "@trpc/server";
+import { Url } from "@prisma/client";
 
-const testUrl = (url: string) => {
+const getFullUrl = (url: string) =>
+  url.startsWith("https://") || url.startsWith("http://")
+    ? url
+    : `https://${url}`;
+
+type CertType = {
+  subject: any;
+  issuer: any;
+  valid_from: string;
+  valid_to: string;
+  pem: string;
+  pubKey: string;
+};
+
+const ErrorCodes = [
+  "CERT_HAS_EXPIRED",
+  "ERR_TLS_CERT_ALTNAME_INVALID",
+  "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "SELF_SIGNED_CERT_IN_CHAIN",
+] as const;
+
+type ErrorCode = typeof ErrorCodes[number];
+
+type Chain = {
+  certs: CertType[];
+  errorCode: ErrorCode | null;
+  authorized: boolean;
+};
+
+const testUrl = (hostname: string, port: number) => {
   // return new Promise<Set<tls.DetailedPeerCertificate>>(
-  return new Promise(async (resolve, reject) => {
-    const { hostname, port } = new URL(url);
-    console.log("\n\n\n\n HOSTNAMEEEE", hostname, port);
+  return new Promise<Chain>(async (resolve, reject) => {
     const socket = tls.connect(
       {
-        port: port ? Number(port) : 443,
+        port: port,
         timeout: 3000,
         host: hostname,
         servername: hostname,
@@ -20,22 +49,47 @@ const testUrl = (url: string) => {
         //   await fs.readFile("./mozilla_root_store.pem"),
         //   await fs.readFile("./msft_root_store.pem"),
         // ],
+        rejectUnauthorized: false,
       },
       () => {
         let peerCert = socket.getPeerCertificate(true);
-        let lasIssuer = "";
+        const selfSigned = peerCert.issuer === peerCert.subject;
+        const authError = socket.authorizationError;
+        console.log({ peerCert, authError, selfSigned });
+        let prefix = "-----BEGIN CERTIFICATE-----\n";
+        let postfix = "-----END CERTIFICATE-----";
+        let pemText =
+          prefix +
+          peerCert.raw
+            .toString("base64")
+            .match(/.{0,64}/g)
+            ?.join("\n") +
+          postfix;
+
+        console.log(pemText);
+        console.log(peerCert.infoAccess);
+
         const list = new Set<tls.DetailedPeerCertificate>();
         const chain = [];
+
         do {
           list.add(peerCert);
-          const cert = {
+          console.log("--->", peerCert);
+          const cert: CertType = {
             subject: peerCert.subject,
             issuer: peerCert.issuer,
             valid_from: peerCert.valid_from,
             valid_to: peerCert.valid_to,
+            pem:
+              prefix +
+              peerCert.raw
+                .toString("base64")
+                .match(/.{0,64}/g)
+                ?.join("\n") +
+              postfix,
+            // info: peerCert.infoAccess,
+            pubKey: (peerCert as any).pubkey.toString("base64"),
           };
-          lasIssuer = cert.issuer.CN ?? lasIssuer;
-          console.log(cert, "\n");
           chain.push(cert);
           peerCert = peerCert.issuerCertificate;
         } while (
@@ -43,20 +97,51 @@ const testUrl = (url: string) => {
           typeof peerCert === "object" &&
           !list.has(peerCert)
         );
+        console.log(chain);
         socket.end(() => {
           console.log("cliend closed successfully");
         });
-        console.log("\n\n\n\n\nchain", list);
-        resolve({ chain, lasIssuerCN: lasIssuer, host: hostname });
+        console.log({
+          certs: chain,
+          errorCode: !socket.authorized ? socket.authorizationError : null,
+          authorized: socket.authorized,
+        });
+        resolve({
+          certs: chain,
+          errorCode: !socket.authorized
+            ? (String(socket.authorizationError) as ErrorCode)
+            : null,
+          authorized: socket.authorized,
+        });
       }
     );
-    socket.on("timeout", (conn) => {
-      console.log("\n\n\ntimeout", conn);
-      reject("TLS connection timeout");
+    socket.on("secureConnect", () => {
+      console.log(`Successfully connected to ${hostname}:${port}`);
+      console.log(socket.authorized);
+      console.log(socket.authorizationError);
     });
-    socket.on("error", (conn) => {
-      console.log("\n\n\n\nerror", conn.message);
-      reject(conn.message);
+    socket.on("timeout", () => {
+      reject(
+        new TRPCError({ code: "TIMEOUT", message: "TLS connection timeout" })
+      );
+    });
+    socket.on("error", (error) => {
+      console.log("::: ==== :::: ==== error ==== :::: ====");
+      console.log({ code: error.code, msg: error.message });
+      if (error.code === "ERR_SSL_WRONG_VERSION_NUMBER") {
+        reject(
+          new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "HTTPS not supported",
+          })
+        );
+      }
+      reject(
+        new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `${error.code}`,
+        })
+      );
     });
   });
 };
@@ -72,87 +157,85 @@ export const urlRouter = router({
   addUrl: publicProcedure
     .input(urlValidator)
     .mutation(async ({ input, ctx }) => {
-      const addedUrlInfo = [];
-      const addedUrlsInput: string[] = [];
-      // const addedPeerCertificates = new Array<tls.PeerCertificate>();
-      // const addedPeerCertificates = new Array();
-      if (typeof input.urlOrHost === "string") {
-        const completedURL =
-          input.urlOrHost.startsWith("https://") ||
-          input.urlOrHost.startsWith("http://")
-            ? input.urlOrHost
-            : `https://${input.urlOrHost}`;
-        console.log("\n\n\n\n\n\n\n\n\n", completedURL);
+      const certificateChains: Url[] = [];
+
+      const getChain = async (url: string) => {
+        const fullURL = getFullUrl(url);
+        const { hostname, port } = new URL(fullURL);
+        const specifiedPort = port
+          ? Number(port)
+          : url.startsWith("http://")
+          ? 80
+          : 443;
+
+        console.log({
+          url,
+          hostname,
+          port,
+        });
         try {
-          const urlInfo = await testUrl(completedURL);
-          addedUrlInfo.push(urlInfo);
-          addedUrlsInput.push(completedURL);
-        } catch (e) {
-          if (e === "TLS connection timeout") {
-            console.log("TIMEDOUT NO TLS");
-            const { hostname } = new URL(completedURL);
-            console.log("\n\n\n\n\nhostname", hostname);
-            await ctx.prisma.url.create({
+          const chain = await testUrl(hostname, specifiedPort);
+          if (chain.authorized) {
+            return await ctx.prisma.url.create({
               data: {
                 host: hostname,
-                tls: false,
-                trust: 0,
-                chain: {},
+                tls: true,
+                trust: 3,
+                chain,
               },
             });
-          } else {
-            throw e;
           }
-        }
-      }
-      if (input.urlsOrHosts !== null) {
-        for (const urlOrHost of input.urlsOrHosts) {
-          const completedURL =
-            urlOrHost.startsWith("https://") || urlOrHost.startsWith("http://")
-              ? urlOrHost
-              : `https://${urlOrHost}`;
-          try {
-            const urlInfo = await testUrl(completedURL);
-            addedUrlInfo.push(urlInfo);
-            addedUrlsInput.push(completedURL);
-          } catch (e) {
-            if (e === "TLS connection timeout") {
-              console.log("TIMEDOUT NO TLS");
-              const { hostname } = new URL(completedURL);
-              console.log("\n\n\n\n\nhostname", hostname);
-              await ctx.prisma.url.create({
+          if (ErrorCodes.includes(chain.errorCode!)) {
+            return await ctx.prisma.url.create({
+              data: {
+                host: hostname,
+                tls: true,
+                trust: 2,
+                chain,
+              },
+            });
+          }
+          throw new TRPCError({
+            message: "Something went wrong",
+            code: "INTERNAL_SERVER_ERROR",
+          });
+        } catch (err) {
+          if (err instanceof TRPCError) {
+            // HTTP not supported
+            if (err.message === "HTTPS not supported") {
+              return await ctx.prisma.url.create({
                 data: {
                   host: hostname,
                   tls: false,
-                  trust: 0,
+                  trust: 1,
                   chain: {},
                 },
               });
             } else {
-              throw e;
+              throw err;
             }
+          } else {
+            throw err;
           }
         }
-      }
-      console.log("\n\n\n\n\n\n\n\n\n all good");
-      for (let i = 0; i < addedUrlInfo.length; i++) {
-        const urlInfo = addedUrlInfo[i]!;
-        const urlInput = addedUrlsInput[i]!;
+      };
 
-        const { hostname } = new URL(urlInput);
-        // console.log("\n\n\n\n\nstrigg", JSON.stringify(Array.from(urlInfo)));
-        await ctx.prisma.url.create({
-          data: {
-            host: hostname,
-            tls: true,
-            // chain: JSON.stringify(urlInfo.chain),
-            trust: 3,
-            chain: urlInfo,
-            // chain: {},
-          },
+      if (typeof input.urlOrHost === "string") {
+        const chain = await getChain(input.urlOrHost);
+        certificateChains.push(chain);
+      }
+      let errors = false;
+      if (input.urlsOrHosts !== null) {
+        input.urlsOrHosts.forEach(async (url) => {
+          try {
+            const chain = await getChain(url);
+            certificateChains.push(chain);
+          } catch (err) {
+            errors = true;
+          }
         });
       }
-      return JSON.stringify(addedUrlInfo);
+      return { errors, inserted: certificateChains.length };
     }),
   getAll: publicProcedure.query(({ ctx }) => {
     return ctx.prisma.url.findMany();

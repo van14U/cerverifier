@@ -1,4 +1,4 @@
-import { Prisma, Url } from "@prisma/client";
+import { Url } from "@prisma/client";
 import type { NextPage } from "next";
 import Head from "next/head";
 import { useForm } from "react-hook-form";
@@ -6,14 +6,46 @@ import { urlValidator, UrlValidatorType } from "../shared/url";
 import { trpc } from "../utils/trpc";
 import { zodResolver } from "@hookform/resolvers/zod";
 import React from "react";
-import { BiLinkExternal as ExternalLinkIcon } from "react-icons/bi";
 import { GiPlainCircle as CircleIcon } from "react-icons/gi";
-import { GiBreakingChain as ChainIcon } from "react-icons/gi";
-import { ZodError } from "zod";
+import { IoLockClosed as ChromeSecureIcon } from "react-icons/io5";
+import { RiErrorWarningLine as ChromeWarnIcon } from "react-icons/ri";
+import { RiAlertFill as ChromeDangerIcon } from "react-icons/ri";
+import { HiOutlineLockClosed as FirefoxSecureIcon } from "react-icons/hi2";
+import { MdWarning as FirefoxTriangleIcon } from "react-icons/md";
+import { HiOutlineLockClosed as FirefoxLockIcon } from "react-icons/hi2";
+import { BsSlashLg as FirefoxSlashIcon } from "react-icons/bs";
+import { MdLockOutline as EdgeSecureIcon } from "react-icons/md";
+import { MdWarning as EdgeWarnIcon } from "react-icons/md";
+import { MdWarning as EdgeDangerIcon } from "react-icons/md";
+import { GoEye as ChainIcon } from "react-icons/go";
+import { Toaster, toast } from "react-hot-toast";
 
+const Modal: React.FC<React.PropsWithChildren<{ id: string }>> = ({
+  id,
+  children,
+}) => {
+  return (
+    <>
+      <input type="checkbox" className="modal-toggle" id={id} />
+      <div className="modal">
+        <div className="modal-box relative flex flex-col gap-2">
+          <label
+            htmlFor={id}
+            className="btn btn-circle btn-sm absolute right-2 top-2"
+          >
+            ✕
+          </label>
+          {children}
+        </div>
+      </div>
+    </>
+  );
+};
+
+type Vendor = "Microsoft Edge" | "Google Chrome" | "Mozilla Firefox";
 type ScoreContentType = {
   score: number;
-  vendor: "Microsoft Edge" | "Google Chrome" | "Mozilla Firefox";
+  vendor: Vendor;
 };
 const ScoreContent: React.FC<ScoreContentType> = ({ score, vendor }) => {
   return (
@@ -22,12 +54,73 @@ const ScoreContent: React.FC<ScoreContentType> = ({ score, vendor }) => {
         <p className="text-center">{vendor}</p>
       </div>
       <div className="flex items-center justify-center text-4xl">
-        <CircleIcon className={`px-2 ${score >= 1 && "text-green-400"} `} />
-        <CircleIcon className={`px-2 ${score >= 2 && "text-green-400"}`} />
-        <CircleIcon className={`px-2 ${score === 3 && "text-green-400"} `} />
+        <LockType vendor={vendor} score={score} />
+        <CircleIcon
+          className={`px-2 ${score >= 1 ? "text-green-400" : "text-gray-500"} `}
+        />
+        <CircleIcon
+          className={`px-2 ${score >= 2 ? "text-green-400" : "text-gray-500"}`}
+        />
+        <CircleIcon
+          className={`px-2 ${
+            score === 3 ? "text-green-400" : "text-gray-500"
+          } `}
+        />
       </div>
     </div>
   );
+};
+
+const LockType: React.FC<{ vendor: Vendor; score: number }> = (props) => {
+  const { vendor, score } = props;
+  switch (vendor) {
+    case "Mozilla Firefox":
+      switch (score) {
+        case 3:
+          return <FirefoxSecureIcon className="h-5 w-5" />;
+        case 2:
+          return (
+            <div className="relative">
+              <FirefoxLockIcon className="h-5 w-5" />
+              <FirefoxTriangleIcon className="absolute bottom-0 right-0 h-3 w-3" />
+            </div>
+          );
+        case 1:
+          return (
+            <div className="relative">
+              <FirefoxLockIcon className="h-5 w-5" />
+              <FirefoxSlashIcon className="absolute top-0 right-0 h-5 w-5 rotate-90 text-red-400" />
+            </div>
+          );
+        default:
+          return null;
+      }
+    case "Google Chrome":
+      switch (score) {
+        case 3:
+          return <ChromeSecureIcon className="w-5 text-gray-400" />;
+        case 2:
+          return <ChromeDangerIcon className="w-5 text-red-500" />;
+        case 1:
+          return <ChromeWarnIcon className="w-5 rotate-180 text-gray-400" />;
+        default:
+          return null;
+      }
+    case "Microsoft Edge":
+      // return null;
+      switch (score) {
+        case 3:
+          return <EdgeSecureIcon className="w-5 text-gray-400" />;
+        case 2:
+          return <EdgeDangerIcon className="w-5 text-red-500" />;
+        case 1:
+          return <EdgeWarnIcon className="w-5 text-gray-400" />;
+        default:
+          return null;
+      }
+    default:
+      return null;
+  }
 };
 
 const gridClasses = "hidden rounded-lg bg-gray-700 p-4 sm:block";
@@ -39,10 +132,12 @@ const UrlItem: React.FC<{ url: Url }> = ({ url }) => {
         className="collapse rounded-lg border-none bg-gray-700 sm:hidden"
       >
         <div className="collapse-title flex items-center gap-2 truncate text-xl font-medium">
-          <a href={`https://${url.host}`}>
-            <ExternalLinkIcon />
+          <a
+            className="truncate text-sky-400"
+            href={`${url.tls ? "https" : "http"}://${url.host}`}
+          >
+            {`${url.tls ? "https" : "http"}://${url.host}`}
           </a>
-          <a className="truncate">{url.host}</a>
         </div>
         <div className="collapse-content">
           <div className="flex flex-col gap-2">
@@ -69,10 +164,12 @@ const UrlItem: React.FC<{ url: Url }> = ({ url }) => {
               <ChainIcon />
             </label>
           </div>
-          <a href={`https://${url.host}`}>
-            <ExternalLinkIcon />
+          <a
+            className="truncate text-sky-400"
+            href={`${url.tls ? "https" : "http"}://${url.host}`}
+          >
+            {`${url.tls ? "https" : "http"}://${url.host}`}
           </a>
-          <a className="truncate">{url.host}</a>
         </div>
       </div>
       <div className={gridClasses}>
@@ -84,36 +181,12 @@ const UrlItem: React.FC<{ url: Url }> = ({ url }) => {
       <div className={gridClasses}>
         <ScoreContent vendor="Mozilla Firefox" score={url.trust} />
       </div>
-
-      <input
-        type="checkbox"
-        id={`chain-modal-${url.id}`}
-        className="modal-toggle"
-      />
-      <label htmlFor={`chain-modal-${url.id}`} className="modal cursor-pointer">
-        <div className="modal-box relative flex flex-col gap-2">
-          <h3 className="text-lg font-bold">Certificates Chain</h3>
-          <div className="flex flex-col gap-3">
-            {
-              url.chain && <div>{JSON.stringify(url.chain)}</div>
-              // typeof (url.chain as Prisma.JsonArray).length !== "undefined" &&
-              // (url.chain as Prisma.JsonArray).map((u) => (
-              //   <div key={Math.random()}>
-              //     <p>
-              //       Issuer:
-              //       {JSON.stringify((u as Prisma.JsonObject)?.issuer ?? "")}
-              //     </p>
-              //     <p>
-              //       Subject:
-              //       {JSON.stringify((u as Prisma.JsonObject)?.subject ?? "")}
-              //     </p>
-              //   </div>
-              // ))}
-            }
-          </div>
+      <Modal id={`chain-modal-${url.id}`}>
+        <h3 className="text-lg font-bold">Certificates Chain</h3>
+        <div className="flex flex-col gap-3 whitespace-pre-wrap">
+          {url.chain && <div>{JSON.stringify(url.chain, null, 4)}</div>}
         </div>
-      </label>
-      {/* </div> */}
+      </Modal>
     </>
   );
 };
@@ -145,24 +218,43 @@ const UrlGridContent: React.FC<UrlGridContentParams> = ({ urls }) => {
 };
 
 const UrlsForm = () => {
-  const [errMsg, setErrMsg] = React.useState<string>("");
+  const {
+    url: {
+      getAll: { refetch },
+    },
+  } = trpc.useContext();
+
   const addUrlMutation = trpc.url.addUrl.useMutation({
     onSuccess: (data) => {
-      console.log("url added successfully", JSON.parse(data));
-      window.location.reload();
+      refetch();
+      if (data.errors) {
+        toast(
+          `Some urls contained errors, ${data.inserted} URLs added successfully`,
+          {
+            icon: "⚠️",
+            style: {
+              background: "#202020",
+              color: "#fff",
+            },
+          }
+        );
+      } else {
+        toast.success(`${data.inserted} URLs added successfully`, {
+          style: {
+            background: "#202020",
+            color: "#fff",
+          },
+        });
+      }
     },
     onError: (data) => {
       console.log(data.data);
-      try {
-        const err = ZodError.create(JSON.parse(data.message));
-        if (err instanceof ZodError) {
-          console.log("zoderror");
-        }
-        const errMsgs = err.errors.map((e) => `${e.message}`).join("\n");
-        setErrMsg(`Error ${data.data?.httpStatus}: ${errMsgs}`);
-      } catch {
-        setErrMsg(`Error ${data.data?.code ?? "PARSE_ERROR"}: ${data.message}`);
-      }
+      toast.error(data.message, {
+        style: {
+          background: "#202020",
+          color: "#fff",
+        },
+      });
     },
   });
   const {
@@ -173,7 +265,6 @@ const UrlsForm = () => {
     resolver: zodResolver(urlValidator),
     mode: "onChange",
     defaultValues: {
-      // url: null,
       urlOrHost: null,
       urlsOrHosts: null,
     },
@@ -183,70 +274,73 @@ const UrlsForm = () => {
     addUrlMutation.mutate(data);
   };
   return (
-    <form
-      onSubmit={handleSubmit(onSubmit)}
-      className="flex w-full flex-col justify-center gap-4 self-start lg:flex-row"
-    >
-      <div
-        className={`${
-          errors.urlOrHost?.message ? "tooltip tooltip-open" : ""
-        } tooltip-error w-full`}
-        data-tip={errors.urlOrHost?.message}
+    <>
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        className="flex w-full flex-col justify-center gap-4 self-start lg:flex-row"
       >
-        <input
-          placeholder="Type URL"
-          className="input w-full"
-          {...register("urlOrHost")}
-        />
-      </div>
-      <div
-        className={`${
-          errors.urlsOrHosts?.message ? "tooltip tooltip-open" : ""
-        } tooltip-error`}
-        data-tip={errors.urlsOrHosts?.message}
-      >
-        <label className="flex w-full cursor-pointer flex-col">
+        <div
+          className={`${
+            errors.urlOrHost?.message ? "tooltip tooltip-open" : ""
+          } tooltip-error w-full`}
+          data-tip={errors.urlOrHost?.message}
+        >
           <input
-            type="file"
-            className="order-2 max-w-[12rem] text-gray-400 file:hidden"
-            accept="text/plain"
-            {...register("urlsOrHosts")}
+            placeholder="Type URL"
+            className="input w-full"
+            {...register("urlOrHost")}
           />
-          <div className="btn order-1 border-gray-700 hover:border-gray-700">
-            Batch
-          </div>
-        </label>
-      </div>
-
-      <button
-        type="submit"
-        // className="btn border-gray-700 hover:border-gray-700"
-        className={`btn border-gray-700 hover:border-gray-700 ${
-          addUrlMutation.isLoading && "loading"
-        }`}
-      >
-        Verify
-      </button>
-      {addUrlMutation.isError && (
-        <div className="toast toast-start">
-          <div className="alert alert-error">
-            <div>
-              <span>{errMsg}</span>
-            </div>
-          </div>
         </div>
-      )}
-    </form>
+        <div
+          className={`${
+            errors.urlsOrHosts?.message ? "tooltip tooltip-open" : ""
+          } tooltip-error`}
+          data-tip={errors.urlsOrHosts?.message}
+        >
+          <label className="flex w-full cursor-pointer flex-col">
+            <input
+              type="file"
+              className="order-2 max-w-[12rem] text-gray-400 file:hidden"
+              accept="text/plain"
+              {...register("urlsOrHosts")}
+            />
+            <div className="btn order-1 border-gray-700 hover:border-gray-700">
+              Batch
+            </div>
+          </label>
+        </div>
+        <button
+          type="submit"
+          className={`btn border-gray-700 hover:border-gray-700 ${
+            addUrlMutation.isLoading && "loading"
+          }`}
+        >
+          Verify
+        </button>
+      </form>
+    </>
   );
 };
 
 const Home: NextPage = () => {
-  // const hello = trpc.example.hello.useQuery({ text: "from tRPC" });
   const urls = trpc.url.getAll.useQuery();
   const clearAllMutation = trpc.url.deleteAll.useMutation({
-    onSuccess: () => {
-      console.log("clear 200");
-      window.location.reload();
+    onSuccess: (data) => {
+      urls.refetch();
+      toast.success(`${data.count} URLS deleted successfully`, {
+        style: {
+          background: "#202020",
+          color: "#fff",
+        },
+      });
+    },
+    onError: (err) => {
+      toast.error(err.message, {
+        style: {
+          background: "#202020",
+          color: "#fff",
+        },
+      });
     },
   });
   return (
@@ -262,7 +356,6 @@ const Home: NextPage = () => {
           <p>Digital Certificates</p>
           <p>Trust Verifier</p>
         </h1>
-        {/* <h2>{hello.data?.greeting}</h2> */}
         <UrlsForm />
         <UrlGridContent urls={urls.data} />
         <button
@@ -274,6 +367,7 @@ const Home: NextPage = () => {
           Clear All
         </button>
         <TrustStoreInfo />
+        <Toaster position="bottom-left" reverseOrder />
       </main>
     </>
   );
