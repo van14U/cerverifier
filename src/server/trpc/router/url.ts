@@ -1,5 +1,5 @@
 import { router, publicProcedure } from "../trpc";
-import { z, ZodEffects, ZodError } from "zod";
+import { z } from "zod";
 import { urlValidator } from "../../../shared/url";
 import * as tls from "tls";
 import fs from "fs/promises";
@@ -226,14 +226,16 @@ export const urlRouter = router({
       }
       let errors = false;
       if (input.urlsOrHosts !== null) {
-        input.urlsOrHosts.forEach(async (url) => {
-          try {
-            const chain = await getChain(url);
-            certificateChains.push(chain);
-          } catch (err) {
-            errors = true;
-          }
-        });
+        await Promise.all(
+          input.urlsOrHosts.map(async (url) => {
+            try {
+              const chain = await getChain(url);
+              certificateChains.push(chain);
+            } catch (err) {
+              errors = true;
+            }
+          })
+        );
       }
       return { errors, inserted: certificateChains.length };
     }),
