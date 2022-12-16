@@ -56,18 +56,8 @@ const testUrl = (hostname: string, port: number) => {
         const selfSigned = peerCert.issuer === peerCert.subject;
         const authError = socket.authorizationError;
         console.log({ peerCert, authError, selfSigned });
-        let prefix = "-----BEGIN CERTIFICATE-----\n";
-        let postfix = "-----END CERTIFICATE-----";
-        let pemText =
-          prefix +
-          peerCert.raw
-            .toString("base64")
-            .match(/.{0,64}/g)
-            ?.join("\n") +
-          postfix;
-
-        console.log(pemText);
-        console.log(peerCert.infoAccess);
+        const prefix = "-----BEGIN CERTIFICATE-----\n";
+        const postfix = "-----END CERTIFICATE-----";
 
         const list = new Set<tls.DetailedPeerCertificate>();
         const chain = [];
