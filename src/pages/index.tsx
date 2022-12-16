@@ -199,7 +199,10 @@ const UrlItem: React.FC<{ url: Url }> = ({ url }) => {
                 )}
                 <div className="flex flex-col gap-4">
                   {((url.chainFirefox as any).certs ?? []).map((cert: any) => (
-                    <div className="rounded-lg bg-slate-600 p-2">
+                    <div
+                      key={Math.random()}
+                      className="rounded-lg bg-slate-600 p-2"
+                    >
                       <div>
                         <span className="font-medium">Valid from: </span>
                         {cert.valid_from ?? ""}
@@ -249,7 +252,10 @@ const UrlItem: React.FC<{ url: Url }> = ({ url }) => {
                 )}
                 <div className="flex flex-col gap-4">
                   {((url.chainChrome as any).certs ?? []).map((cert: any) => (
-                    <div className="rounded-lg bg-slate-600 p-2">
+                    <div
+                      key={Math.random()}
+                      className="rounded-lg bg-slate-600 p-2"
+                    >
                       <div>
                         <span className="font-medium">Valid from: </span>
                         {cert.valid_from ?? ""}
@@ -298,7 +304,10 @@ const UrlItem: React.FC<{ url: Url }> = ({ url }) => {
                     </div>
                   )}
                   {((url.chainEdge as any).certs ?? []).map((cert: any) => (
-                    <div className="rounded-lg bg-slate-600 p-2">
+                    <div
+                      key={Math.random()}
+                      className="rounded-lg bg-slate-600 p-2"
+                    >
                       <div>
                         <span className="font-medium">Valid from: </span>
                         {cert.valid_from ?? ""}

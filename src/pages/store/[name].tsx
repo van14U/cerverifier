@@ -18,7 +18,7 @@ const StoreView: React.FC<{
       </div>
       <>
         {props.data.certificates.map((cert) => (
-          <div className="rounded-lg bg-slate-600 p-2">
+          <div key={Math.random()} className="rounded-lg bg-slate-600 p-2">
             <div>{JSON.stringify(cert.value, null, 4)}</div>
           </div>
         ))}
