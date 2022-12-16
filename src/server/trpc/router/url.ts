@@ -2,9 +2,11 @@ import { router, publicProcedure } from "../trpc";
 import { z } from "zod";
 import { urlValidator } from "../../../shared/url";
 import * as tls from "tls";
+import * as forge from "node-forge";
 import fs from "fs/promises";
 import { TRPCError } from "@trpc/server";
 import { Url } from "@prisma/client";
+import * as crypto from "crypto";
 
 const getFullUrl = (url: string) =>
   url.startsWith("https://") || url.startsWith("http://")
@@ -35,7 +37,19 @@ type Chain = {
   authorized: boolean;
 };
 
-const testUrl = (hostname: string, port: number) => {
+const prefix = "-----BEGIN CERTIFICATE-----\n";
+const postfix = "-----END CERTIFICATE-----";
+
+type Store = "Google Chrome" | "Mozilla Firefox" | "Microsoft Edge";
+
+const getStoreFile = (store: Store) => {
+  if (store === "Google Chrome") return "./chromium_root_store.pem";
+  if (store === "Mozilla Firefox") return "./mozilla_root_store.pem";
+  if (store === "Microsoft Edge") return "./msft_root_store.pem";
+  return "none";
+};
+
+const testUrl = (hostname: string, port: number, store: Store) => {
   // return new Promise<Set<tls.DetailedPeerCertificate>>(
   return new Promise<Chain>(async (resolve, reject) => {
     const socket = tls.connect(
@@ -44,27 +58,26 @@ const testUrl = (hostname: string, port: number) => {
         timeout: 3000,
         host: hostname,
         servername: hostname,
-        // ca: [
-        //   await fs.readFile("./chromium_root_store.pem"),
-        //   await fs.readFile("./mozilla_root_store.pem"),
-        //   await fs.readFile("./msft_root_store.pem"),
-        // ],
+        ca: [
+          // await fs.readFile("./chromium_root_store.pem"),
+          // await fs.readFile("./mozilla_root_store.pem"),
+          await fs.readFile(getStoreFile(store)),
+          // await fs.readFile("./msft_root_store.pem"),
+        ],
         rejectUnauthorized: false,
       },
       () => {
         let peerCert = socket.getPeerCertificate(true);
-        const selfSigned = peerCert.issuer === peerCert.subject;
-        const authError = socket.authorizationError;
-        console.log({ peerCert, authError, selfSigned });
-        const prefix = "-----BEGIN CERTIFICATE-----\n";
-        const postfix = "-----END CERTIFICATE-----";
+        // const selfSigned = peerCert.issuer === peerCert.subject;
+        // const authError = socket.authorizationError;
+        // console.log({ peerCert, authError, selfSigned });
 
         const list = new Set<tls.DetailedPeerCertificate>();
         const chain = [];
 
         do {
           list.add(peerCert);
-          console.log("--->", peerCert);
+          // console.log("--->", peerCert);
           const cert: CertType = {
             subject: peerCert.subject,
             issuer: peerCert.issuer,
@@ -87,15 +100,15 @@ const testUrl = (hostname: string, port: number) => {
           typeof peerCert === "object" &&
           !list.has(peerCert)
         );
-        console.log(chain);
+        // console.log(chain);
         socket.end(() => {
           console.log("cliend closed successfully");
         });
-        console.log({
-          certs: chain,
-          errorCode: !socket.authorized ? socket.authorizationError : null,
-          authorized: socket.authorized,
-        });
+        // console.log({
+        //   certs: chain,
+        //   errorCode: !socket.authorized ? socket.authorizationError : null,
+        //   authorized: socket.authorized,
+        // });
         resolve({
           certs: chain,
           errorCode: !socket.authorized
@@ -144,6 +157,83 @@ export const urlRouter = router({
         greeting: `Hello ${input?.text ?? "world"}`,
       };
     }),
+  initcerts: publicProcedure.query(async ({ ctx }) => {
+    // console.log("initcerts");
+    const cas = await Promise.all(
+      [
+        "./chromium_root_store.pem",
+        "./mozilla_root_store.pem",
+        "./msft_root_store.pem",
+      ].map(async (ca) => {
+        const regex =
+          /^-----BEGIN CERTIFICATE-----\r?\n((?:(?!-----).*\r?\n)*)-----END CERTIFICATE-----/gm;
+
+        const pemFile = (await fs.readFile(ca)).toString();
+        const getStoreName = (ca: string): Store => {
+          if (ca === "./chromium_root_store.pem") return "Google Chrome";
+          if (ca === "./mozilla_root_store.pem") return "Mozilla Firefox";
+          if (ca === "./msft_root_store.pem") return "Microsoft Edge";
+          throw new TRPCError({
+            message: "Invalid store",
+            code: "BAD_REQUEST",
+          });
+        };
+        const store = getStoreName(ca);
+        let m;
+        const certs: crypto.X509Certificate[] = [];
+        while ((m = regex.exec(pemFile)) !== null) {
+          // This is necessary to avoid infinite loops with zero-width matches
+          if (m.index === regex.lastIndex) {
+            regex.lastIndex++;
+          }
+          // console.log(i);
+          const x509 = new crypto.X509Certificate(
+            Buffer.from(prefix + m[1] + postfix)
+          );
+          certs.push(x509);
+          // x509.publicKey
+          // console.log(x509);
+          // ctx.prism
+          // const cert = forge.pki.certificateFromPem(prefix + m[1] + postfix);
+        }
+        console.log(store);
+        await ctx.prisma.trustStore.create({
+          data: {
+            name: store,
+            total: certs.length,
+            certificates: {
+              // create: certs as any,
+              create: certs.map((cert) => ({
+                value: {
+                  validFrom: cert.validFrom,
+                  validTo: cert.validTo,
+                  keyType: cert.publicKey.asymmetricKeyType,
+                  modulos: cert.publicKey.asymmetricKeyDetails!.modulusLength,
+                },
+              })),
+              // {
+              //   value: certs as any,
+              // },
+            },
+          },
+        });
+        return { ca, certs: certs.length };
+      })
+    );
+    // // console.log(pem);
+    // return null;
+    return cas;
+  }),
+  getStore: publicProcedure
+    .input(z.object({ name: z.string() }))
+    .query(async ({ input, ctx }) => {
+      return await ctx.prisma.trustStore.findFirst({
+        where: {
+          name: input.name,
+        },
+        include: { certificates: true },
+      });
+    }),
   addUrl: publicProcedure
     .input(urlValidator)
     .mutation(async ({ input, ctx }) => {
@@ -163,35 +253,56 @@ export const urlRouter = router({
           hostname,
           port,
         });
-        try {
-          const chain = await testUrl(hostname, specifiedPort);
+        const getTrustLevel = (chain: Chain) => {
           if (chain.authorized) {
-            return await ctx.prisma.url.create({
-              data: {
-                host: hostname,
-                tls: true,
-                trust: 3,
-                chain,
-              },
-            });
+            return 3;
           }
           if (ErrorCodes.includes(chain.errorCode!)) {
-            return await ctx.prisma.url.create({
-              data: {
-                host: hostname,
-                tls: true,
-                trust: 2,
-                chain,
-              },
-            });
+            return 2;
           }
           throw new TRPCError({
             message: "Something went wrong",
             code: "INTERNAL_SERVER_ERROR",
           });
+        };
+        try {
+          const chainChrome = await testUrl(
+            hostname,
+            specifiedPort,
+            "Google Chrome"
+          );
+          const trustChrome = getTrustLevel(chainChrome);
+
+          const chainFirefox = await testUrl(
+            hostname,
+            specifiedPort,
+            "Microsoft Edge"
+          );
+          const trustFirefox = getTrustLevel(chainChrome);
+
+          const chainEdge = await testUrl(
+            hostname,
+            specifiedPort,
+            "Mozilla Firefox"
+          );
+          const trustEdge = getTrustLevel(chainEdge);
+          return await ctx.prisma.url.create({
+            data: {
+              host: hostname,
+              tls: true,
+              chain: chainFirefox,
+              trust: trustFirefox,
+              chainFirefox,
+              trustFirefox,
+              chainChrome,
+              trustChrome,
+              chainEdge,
+              trustEdge,
+            },
+          });
         } catch (err) {
           if (err instanceof TRPCError) {
-            // HTTP not supported
+            // HTTPS not supported
             if (err.message === "HTTPS not supported") {
               return await ctx.prisma.url.create({
                 data: {
@@ -199,6 +310,12 @@ export const urlRouter = router({
                   tls: false,
                   trust: 1,
                   chain: {},
+                  chainChrome: {},
+                  trustChrome: 1,
+                  chainFirefox: {},
+                  trustFirefox: 1,
+                  chainEdge: {},
+                  trustEdge: 1,
                 },
               });
             } else {

@@ -2,14 +2,12 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-    provider        = "prisma-client-js"
-    previewFeatures = ["referentialIntegrity"]
+    provider = "prisma-client-js"
 }
 
 datasource db {
-    provider             = "mysql"
-    url                  = env("DATABASE_URL")
-    referentialIntegrity = "prisma"
+    provider = "mysql"
+    url      = env("DATABASE_URL")
 }
 
 model Example {
@@ -17,9 +15,29 @@ model Example {
 }
 
 model Url {
-    id    String  @id @default(cuid())
-    host  String
-    tls   Boolean
-    chain Json
-    trust Int
+    id           String  @id @default(cuid())
+    host         String
+    tls          Boolean
+    chain        Json
+    trust        Int
+    trustFirefox Int
+    chainFirefox Json
+    trustChrome  Int
+    chainChrome  Json
+    trustEdge    Int
+    chainEdge    Json
+}
+
+model TrustStore {
+    id           String        @id @default(cuid())
+    name         String
+    total        Int
+    certificates Certificate[]
+}
+
+model Certificate {
+    id           String     @id @default(cuid())
+    trustStoreId String
+    trustStore   TrustStore @relation(fields: [trustStoreId], references: [id], onDelete: Cascade)
+    value        Json
 }

@@ -19,6 +19,7 @@ import { MdWarning as EdgeWarnIcon } from "react-icons/md";
 import { MdWarning as EdgeDangerIcon } from "react-icons/md";
 import { GoEye as ChainIcon } from "react-icons/go";
 import { Toaster, toast } from "react-hot-toast";
+import { useRouter } from "next/router";
 
 const Modal: React.FC<React.PropsWithChildren<{ id: string }>> = ({
   id,
@@ -141,9 +142,9 @@ const UrlItem: React.FC<{ url: Url }> = ({ url }) => {
         </div>
         <div className="collapse-content">
           <div className="flex flex-col gap-2">
-            <ScoreContent vendor="Microsoft Edge" score={url.trust} />
-            <ScoreContent vendor="Google Chrome" score={url.trust} />
-            <ScoreContent vendor="Mozilla Firefox" score={url.trust} />
+            <ScoreContent vendor="Microsoft Edge" score={url.trustEdge} />
+            <ScoreContent vendor="Google Chrome" score={url.trustChrome} />
+            <ScoreContent vendor="Mozilla Firefox" score={url.trustFirefox} />
             <label
               htmlFor={`chain-modal-${url.id}`}
               className="modal-button btn btn-sm"
@@ -183,8 +184,155 @@ const UrlItem: React.FC<{ url: Url }> = ({ url }) => {
       </div>
       <Modal id={`chain-modal-${url.id}`}>
         <h3 className="text-lg font-bold">Certificates Chain</h3>
-        <div className="flex flex-col gap-3 whitespace-pre-wrap">
-          {url.chain && <div>{JSON.stringify(url.chain, null, 4)}</div>}
+        <div className="flex flex-col gap-16">
+          <div className="flex flex-col gap-3 whitespace-pre-wrap">
+            {url.chainFirefox && (
+              <div className="flex flex-col gap-2">
+                <div className="rounded-lg bg-zinc-600 p-2 font-semibold">
+                  Firefox Chain
+                </div>
+                {!(url.chainFirefox as any).authorized && (
+                  <div className="rounded-lg bg-slate-600 p-2">
+                    <div>Not authorized</div>
+                    <div>{(url.chainChrome as any).errorCode}</div>
+                  </div>
+                )}
+                <div className="flex flex-col gap-4">
+                  {((url.chainFirefox as any).certs ?? []).map((cert: any) => (
+                    <div className="rounded-lg bg-slate-600 p-2">
+                      <div>
+                        <span className="font-medium">Valid from: </span>
+                        {cert.valid_from ?? ""}
+                      </div>
+                      <div>
+                        <span className="font-medium">Valid to: </span>
+                        {cert.valid_to ?? ""}
+                      </div>
+                      <div>
+                        <div className="font-medium">Issuer</div>
+                        {JSON.stringify(cert.issuer, null, 4)}
+                      </div>
+                      <div>
+                        <div className="font-medium">Subject</div>
+                        {JSON.stringify(cert.subject, null, 4)}
+                      </div>
+                      <div>
+                        <div className=" font-medium">Certificate</div>
+                        <div className="overflow-x-auto whitespace-pre break-words">
+                          {cert.pem}
+                        </div>
+                      </div>
+                      <div>
+                        <div className=" font-medium">Public Key</div>
+                        <div className="overflow-x-auto whitespace-pre break-words">
+                          {cert.pubKey}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex flex-col gap-3 whitespace-pre-wrap">
+            {/* {url.chainChrome && (url.chainChrome as any).certs && ( */}
+            {url.chainChrome && (
+              <div className="flex flex-col gap-2">
+                <div className="rounded-lg bg-zinc-600 p-2 font-semibold">
+                  Google Chrome Chain
+                </div>
+                {!(url.chainChrome as any).authorized && (
+                  <div className="rounded-lg bg-slate-600 p-2">
+                    <div>Not authorized</div>
+                    <div>{(url.chainChrome as any).errorCode}</div>
+                  </div>
+                )}
+                <div className="flex flex-col gap-4">
+                  {((url.chainChrome as any).certs ?? []).map((cert: any) => (
+                    <div className="rounded-lg bg-slate-600 p-2">
+                      <div>
+                        <span className="font-medium">Valid from: </span>
+                        {cert.valid_from ?? ""}
+                      </div>
+                      <div>
+                        <span className="font-medium">Valid to: </span>
+                        {cert.valid_to ?? ""}
+                      </div>
+                      <div>
+                        <div className="font-medium">Issuer</div>
+                        {JSON.stringify(cert.issuer, null, 4)}
+                      </div>
+                      <div>
+                        <div className="font-medium">Subject</div>
+                        {JSON.stringify(cert.subject, null, 4)}
+                      </div>
+                      <div>
+                        <div className=" font-medium">Certificate</div>
+                        <div className="overflow-x-auto whitespace-pre break-words">
+                          {cert.pem}
+                        </div>
+                      </div>
+                      <div>
+                        <div className=" font-medium">Public Key</div>
+                        <div className="overflow-x-auto whitespace-pre break-words">
+                          {cert.pubKey}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex flex-col gap-3 whitespace-pre-wrap">
+            {url.chainEdge && (
+              <div className="flex flex-col gap-2">
+                <div className="rounded-lg bg-zinc-600 p-2 font-semibold">
+                  Microsoft Edge Chain
+                </div>
+                <div className="flex flex-col gap-4">
+                  {!(url.chainEdge as any).authorized && (
+                    <div className="rounded-lg bg-slate-600 p-2">
+                      <div>Not authorized</div>
+                      <div>{(url.chainEdge as any).errorCode}</div>
+                    </div>
+                  )}
+                  {((url.chainEdge as any).certs ?? []).map((cert: any) => (
+                    <div className="rounded-lg bg-slate-600 p-2">
+                      <div>
+                        <span className="font-medium">Valid from: </span>
+                        {cert.valid_from ?? ""}
+                      </div>
+                      <div>
+                        <span className="font-medium">Valid to: </span>
+                        {cert.valid_to ?? ""}
+                      </div>
+                      <div>
+                        <div className="font-medium">Issuer</div>
+                        {JSON.stringify(cert.issuer, null, 4)}
+                      </div>
+                      <div>
+                        <div className="font-medium">Subject</div>
+                        {JSON.stringify(cert.subject, null, 4)}
+                      </div>
+                      <div>
+                        <div className=" font-medium">Certificate</div>
+                        <div className="overflow-x-auto whitespace-pre break-words">
+                          {cert.pem}
+                        </div>
+                      </div>
+                      <div>
+                        <div className=" font-medium">Public Key</div>
+                        <div className="overflow-x-auto whitespace-pre break-words">
+                          {cert.pubKey}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </Modal>
     </>
@@ -375,19 +523,37 @@ const Home: NextPage = () => {
 
 export default Home;
 
-const TrustStoreInfo = () => (
-  <div className="mt-auto flex w-full flex-col items-center justify-between p-4 sm:flex-row">
-    <a href="https://ccadb-public.secure.force.com/mozilla/IncludedCACertificateReport">
-      Mozilla
-    </a>
-    <a href="https://ccadb-public.secure.force.com/microsoft/IncludedCACertificateReportForMSFT">
-      Microsoft
-    </a>
-    <a href="https://chromium.googlesource.com/chromium/src/+/main/net/data/ssl/chrome_root_store/root_store.md">
-      Google
-    </a>
-  </div>
-);
+const TrustStoreInfo = () => {
+  const router = useRouter();
+  return (
+    <div className="mt-auto flex w-full flex-col items-center justify-between p-4 sm:flex-row">
+      <span
+        className="badge badge-lg cursor-pointer"
+        onClick={() => {
+          router.push("/store/Mozilla Firefox");
+        }}
+      >
+        Mozilla
+      </span>
+      <span
+        className="badge badge-lg cursor-pointer"
+        onClick={() => {
+          router.push("/store/Microsoft Edge");
+        }}
+      >
+        Microsoft
+      </span>
+      <span
+        className="badge badge-lg cursor-pointer"
+        onClick={() => {
+          router.push("/store/Google Chrome");
+        }}
+      >
+        Google
+      </span>
+    </div>
+  );
+};
 
 const Labels = ({ labels }: { labels: string[] }) => (
   <>
