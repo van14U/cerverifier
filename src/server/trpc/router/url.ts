@@ -57,12 +57,12 @@ const testUrl = (hostname: string, port: number, store: Store) => {
         timeout: 3000,
         host: hostname,
         servername: hostname,
-        ca: [
-          // await fs.readFile("./chromium_root_store.pem"),
-          // await fs.readFile("./mozilla_root_store.pem"),
-          await fs.readFile(getStoreFile(store)),
-          // await fs.readFile("./msft_root_store.pem"),
-        ],
+        // ca: [
+        //   // await fs.readFile("./chromium_root_store.pem"),
+        //   // await fs.readFile("./mozilla_root_store.pem"),
+        //   await fs.readFile(getStoreFile(store)),
+        //   // await fs.readFile("./msft_root_store.pem"),
+        // ],
         rejectUnauthorized: false,
       },
       () => {
